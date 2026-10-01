@@ -1,0 +1,146 @@
+{
+ "px_per_unit": 5.0,
+ "origin": [
+  -76.06,
+  -86.41
+ ],
+ "size": [
+  725,
+  725
+ ],
+ "neck": [
+  -0.67,
+  -41.28
+ ],
+ "ear_tips": [
+  [
+   36.07,
+   -60.15
+  ],
+  [
+   -36.07,
+   -60.15
+  ]
+ ],
+ "head_crop": [
+  173,
+  35,
+  404,
+  219
+ ],
+ "head": {
+  "wake0": "head_wake0.png",
+  "wake1": "head_wake1.png",
+  "wake2": "head_wake2.png",
+  "wake3": "head_wake3.png",
+  "wake4": "head_wake4.png",
+  "wake5": "head_wake5.png",
+  "wake6": "head_wake6.png",
+  "wake7": "head_wake7.png",
+  "wake8": "head_wake8.png",
+  "wake9": "head_wake9.png",
+  "wake10": "head_wake10.png",
+  "wake11": "head_wake11.png",
+  "wake12": "head_wake12.png",
+  "wake13": "head_wake13.png",
+  "wake14": "head_wake14.png",
+  "wake15": "head_wake15.png",
+  "blink0": "head_blink0.png",
+  "blink1": "head_blink1.png",
+  "blink2": "head_blink2.png",
+  "blink3": "head_blink3.png",
+  "talk0": "head_talk0.png",
+  "talk1": "head_talk1.png",
+  "talk2": "head_talk2.png",
+  "talk3": "head_talk3.png",
+  "round0": "head_round0.png",
+  "round1": "head_round1.png",
+  "round2": "head_round2.png",
+  "round3": "head_round3.png",
+  "wide0": "head_wide0.png",
+  "wide1": "head_wide1.png",
+  "wide2": "head_wide2.png",
+  "wide3": "head_wide3.png",
+  "left0": "head_left0.png",
+  "left1": "head_left1.png",
+  "left2": "head_left2.png",
+  "left3": "head_left3.png",
+  "left4": "head_left4.png",
+  "left5": "head_left5.png",
+  "left6": "head_left6.png",
+  "left7": "head_left7.png",
+  "right0": "head_right0.png",
+  "right1": "head_right1.png",
+  "right2": "head_right2.png",
+  "right3": "head_right3.png",
+  "right4": "head_right4.png",
+  "right5": "head_right5.png",
+  "right6": "head_right6.png",
+  "right7": "head_right7.png"
+ },
+ "sequences": {
+  "wake": [
+   "wake0",
+   "wake1",
+   "wake2",
+   "wake3",
+   "wake4",
+   "wake5",
+   "wake6",
+   "wake7",
+   "wake8",
+   "wake9",
+   "wake10",
+   "wake11",
+   "wake12",
+   "wake13",
+   "wake14",
+   "wake15"
+  ],
+  "blink": [
+   "blink0",
+   "blink1",
+   "blink2",
+   "blink3"
+  ],
+  "talk": [
+   "talk0",
+   "talk1",
+   "talk2",
+   "talk3"
+  ],
+  "talk_round": [
+   "round0",
+   "round1",
+   "round2",
+   "round3"
+  ],
+  "talk_wide": [
+   "wide0",
+   "wide1",
+   "wide2",
+   "wide3"
+  ],
+  "look_left": [
+   "left0",
+   "left1",
+   "left2",
+   "left3",
+   "left4",
+   "left5",
+   "left6",
+   "left7"
+  ],
+  "look_right": [
+   "right0",
+   "right1",
+   "right2",
+   "right3",
+   "right4",
+   "right5",
+   "right6",
+   "right7"
+  ]
+ },
+ "credit": "Rendered from \"Yoda Rig\" (https://sketchfab.com/3d-models/yoda-rig-161ecf7f6a6647ae88a8a9dbba6f0cc5) by TheWorm, licensed CC BY-NC 4.0"
+}

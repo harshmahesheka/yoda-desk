@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# Yoda Desk: install, remove and talk to Yoda, keeper of your reading list.
+set -euo pipefail
+
+APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/yoda-desk"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/yoda-desk"
+CONFIG="$CONFIG_DIR/config.json"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/yoda-desk"
+UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+UNIT="$UNIT_DIR/yoda-desk.service"
+AUTOSTART="${XDG_CONFIG_HOME:-$HOME/.config}/autostart/yoda-desk.desktop"
+BIN="$HOME/.local/bin/yoda-desk"
+SRC="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+REQUEST="${XDG_RUNTIME_DIR:-/tmp}/yoda-desk-request"
+
+usage() {
+  cat <<EOF
+Usage: yoda-desk <command>
+
+  install          Install Yoda and start him (he starts at every login)
+  uninstall        Remove Yoda (--purge also deletes your settings and reading log;
+                   your papers and notes are never touched)
+  start | stop     Start or stop him
+  restart          Restart him (also re-reads the settings)
+  status           Show whether he's running
+  config           Edit the settings, then apply them
+  logs             Follow his log
+  list             Open the reading list
+  note [text]      Write a note: with no text, opens the note box (bind it to a keyboard
+                   shortcut); -t "heading" adds a heading; '-' reads the note from stdin
+  notes            Read your notes
+  celebrate [rank] See him celebrate a met goal (or, with 'rank', a promotion)
+EOF
+}
+
+check_deps() {
+  if ! python3 -c 'import gi, cairo; gi.require_version("Gtk", "3.0"); gi.require_version("PangoCairo", "1.0"); from gi.repository import Gtk, PangoCairo' 2>/dev/null; then
+    echo "Yoda Desk needs Python 3 with GTK 3. Install it with:" >&2
+    echo "  Debian/Ubuntu:  sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0" >&2
+    echo "  Fedora:         sudo dnf install python3-gobject python3-cairo gtk3" >&2
+    echo "  Arch:           sudo pacman -S python-gobject python-cairo gtk3" >&2
+    exit 1
+  fi
+  if ! command -v systemctl >/dev/null || ! systemctl --user show-environment >/dev/null 2>&1; then
+    echo "Yoda Desk needs a systemd user session to run in the background." >&2
+    echo "You can still run him by hand:  python3 $SRC/app/yoda.py" >&2
+    exit 1
+  fi
+}
+
+install() {
+  if [[ ! -f "$SRC/app/yoda.py" ]] || [[ "$SRC" -ef "$APP_DIR" ]]; then
+    echo "Run install from the Yoda Desk folder, e.g.:  cd ~/yoda-desk && ./yoda-desk install" >&2
+    exit 1
+  fi
+  check_deps
+  mkdir -p "$APP_DIR" "$UNIT_DIR" "$(dirname "$BIN")" "$(dirname "$AUTOSTART")"
+  rm -rf "$APP_DIR/app" "$APP_DIR/assets"
+  cp -r "$SRC/app" "$SRC/assets" "$APP_DIR/"
+  find "$APP_DIR/app" -name __pycache__ -prune -exec rm -rf {} +
+  cp "$SRC/yoda-desk" "$APP_DIR/yoda-desk"
+  chmod +x "$APP_DIR/yoda-desk"
+  ln -sf "$APP_DIR/yoda-desk" "$BIN"
+
+  cat > "$UNIT" <<EOF
+[Unit]
+Description=Yoda Desk
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/env python3 "$APP_DIR/app/yoda.py"
+# Yoda is an X11 window; on Wayland he runs through XWayland.
+Environment=GDK_BACKEND=x11
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
+EOF
+
+  # Desktops that don't start graphical-session.target (e.g. XFCE) use this instead;
+  # it also hands the display to systemd. Starting twice is harmless.
+  cat > "$AUTOSTART" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Yoda Desk
+Comment=Yoda, keeper of your reading list
+Exec=sh -c 'systemctl --user import-environment DISPLAY XAUTHORITY WAYLAND_DISPLAY; systemctl --user start yoda-desk.service'
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+EOF
+
+  systemctl --user import-environment DISPLAY XAUTHORITY WAYLAND_DISPLAY 2>/dev/null || true
+  systemctl --user daemon-reload
+  systemctl --user enable yoda-desk.service >/dev/null 2>&1
+  if systemctl --user show-environment 2>/dev/null | grep -q "^DISPLAY="; then
+    systemctl --user restart yoda-desk.service
+    echo "Yoda is installed and meditating in the top-right corner. He starts at every login."
+  else
+    echo "Yoda is installed. No desktop session found, so he'll appear at your next login."
+  fi
+  echo "Run 'yoda-desk config' to set your papers folder and weekly goal, or 'yoda-desk' for all commands."
+  if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
+    echo "Note: on Wayland Yoda runs through XWayland; some compositors won't keep him behind other windows."
+  fi
+}
+
+uninstall() {
+  systemctl --user disable --now yoda-desk.service >/dev/null 2>&1 || true
+  rm -f "$UNIT" "$AUTOSTART" "$BIN"
+  systemctl --user daemon-reload 2>/dev/null || true
+  rm -rf "$APP_DIR"
+  if [[ "${1:-}" == "--purge" ]]; then
+    rm -rf "$CONFIG_DIR" "$STATE_DIR"
+    echo "Yoda Desk, its settings and reading log removed. Your papers and notes were left alone."
+  else
+    echo "Yoda Desk removed. Your settings and reading log are kept (use --purge to delete them)."
+  fi
+}
+
+edit_config() {
+  mkdir -p "$CONFIG_DIR"
+  if [[ ! -f "$CONFIG" ]]; then
+    cat > "$CONFIG" <<'EOF'
+{
+  "papers_dir": "~/Papers",
+  "notes_dir": "~/Papers/Notes",
+  "weekly_paper_goal": 3,
+  "week_starts_on": "monday",
+  "remind_minutes": 45,
+  "size": 1.0,
+  "monitor": "primary"
+}
+EOF
+  fi
+  if [[ -t 0 ]]; then
+    # sh -c so editors given with arguments (e.g. "code --wait") work.
+    sh -c "${VISUAL:-${EDITOR:-nano}} \"\$1\"" sh "$CONFIG"
+    systemctl --user restart yoda-desk.service && echo "Settings applied."
+  else
+    xdg-open "$CONFIG" >/dev/null 2>&1 &
+    echo "Opened $CONFIG. Run 'yoda-desk restart' after saving."
+  fi
+}
+
+# Ask the running Yoda to do something (see _on_request in app/yoda.py).
+request() {
+  echo "$1 $(date +%s)" > "$REQUEST"
+  if ! systemctl --user kill --kill-who=main --signal=USR1 yoda-desk.service 2>/dev/null; then
+    rm -f "$REQUEST"
+    echo "Yoda isn't running. Start him with: yoda-desk start" >&2
+    exit 1
+  fi
+}
+
+note() {
+  if [[ $# -eq 0 ]]; then
+    request note
+  else
+    python3 "$SRC/app/library.py" add-note "$@"
+    request noted 2>/dev/null || true  # show it arriving, if he's running
+  fi
+}
+
+case "${1:-}" in
+  install) install ;;
+  uninstall) uninstall "${2:-}" ;;
+  start | stop | restart | status) systemctl --user "$1" yoda-desk.service ;;
+  config) edit_config ;;
+  logs) journalctl --user -u yoda-desk.service -f ;;
+  list) request list ;;
+  note) shift; note "$@" ;;
+  notes) request notes ;;
+  celebrate) request "celebrate${2:+-$2}" ;;
+  *) usage ;;
+esac
