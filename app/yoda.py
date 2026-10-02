@@ -28,7 +28,8 @@ import cairo
 import library
 from library import (ADDED, BACKLOG, BEHIND, DONE, EMPTY, GOAL_MET, LAST_DAYS, LATE, LIFELINE_EARNED,
                      LIFELINE_SPENT, LONG_WAIT, MASTER_MET, MORNING, NOTED, ON_TRACK, OPENED, PROMOTED,
-                     STREAK_LOST, WEEKEND, WISDOM, Library, Notes, load_config)
+                     STREAK_LOST, WEEKEND, WISDOM, Library, Notes, load_config,
+                     save_config_value)
 from popups import SANS, NoteBox, ReadingPopup, rounded_rect
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango, PangoCairo
 
@@ -40,6 +41,8 @@ RIM = (0.62, 0.84, 1.0)
 
 # Geometry, in Yoda units (y down, origin at his centre); a unit is S window pixels.
 WINDOW_W, WINDOW_H = 430, 184  # his window: room for the speech bubble to his left
+REF_DPI = 96.0  # the screen density those units are drawn for
+SIZES = (("Smaller", 0.8), ("Normal", 1.0), ("Bigger", 1.3), ("Biggest", 1.6))
 CENTRE_X, CENTRE_Y = 318, 98  # where he sits in it
 HEAD_Y = -58  # the middle of his head
 FLOOR_Y = 50  # the bottom of his lap
@@ -1448,9 +1451,26 @@ class Yoda:
 
 # ---------- the app: Yoda's window, his two popups, and the commands that reach them
 
+def monitor_dpi(monitor):
+    """How dense the monitor is, in the pixels Yoda is drawn in, or None if it won't say.
+
+    GDK reports its geometry already divided by the desktop's scale factor, so a screen the desktop
+    is scaling reads as the density it is actually drawn at, not the panel's own."""
+    override = os.environ.get("YODA_DESK_DPI")  # for trying other screens
+    if override:
+        return float(override)
+    if monitor is None:
+        return None
+    geometry, mm = monitor.get_geometry(), monitor.get_width_mm()
+    if mm <= 0 or geometry.width <= 0:
+        return None
+    dpi = geometry.width * 25.4 / mm
+    return dpi if 50 <= dpi <= 500 else None  # some screens report nonsense; fall back to 96
+
+
 def pick_area(display, choice):
-    """(work area, pixel density) of the configured monitor. YODA_DESK_AREA=x,y,w,h overrides
-    the area, for trying other screen sizes."""
+    """(work area, pixel density, screen dpi) of the configured monitor. YODA_DESK_AREA=x,y,w,h
+    overrides the area, for trying other screen sizes."""
     monitor = None
     if isinstance(choice, int) and 0 <= choice < display.get_n_monitors():
         monitor = display.get_monitor(choice)
@@ -1459,24 +1479,30 @@ def pick_area(display, choice):
     if override:
         rect = Gdk.Rectangle()
         rect.x, rect.y, rect.width, rect.height = (int(v) for v in override.split(","))
-        return rect, monitor.get_scale_factor() if monitor else 1
+        return rect, monitor.get_scale_factor() if monitor else 1, monitor_dpi(monitor)
     if monitor is None:
-        return None, 1
-    return monitor.get_workarea(), monitor.get_scale_factor()
+        return None, 1, None
+    return monitor.get_workarea(), monitor.get_scale_factor(), monitor_dpi(monitor)
 
 
-def yoda_scale(area, size=1.0):
-    """Window pixels per Yoda unit: bigger on taller screens, never wider than the screen allows."""
-    s = clamp(area.height / 1350, 1.0, 1.9) * size
-    s = min(s, (area.width - 8) / WINDOW_W, (area.height * 0.6) / WINDOW_H)  # small or odd screens
-    return max(0.5, s)
+def yoda_scale(area, size=1.0, dpi=None):
+    """Window pixels per Yoda unit.
+
+    His units are drawn for a 96 dpi screen, so counting pixels alone leaves him physically tiny on
+    a dense laptop panel. Follow the screen's density first, so he comes out about the same size in
+    the real world wherever he sits; then a little more on a tall screen, and never more than a
+    third of a small one."""
+    s = clamp((dpi or REF_DPI) / REF_DPI, 1.0, 2.0) * clamp(area.height / 1350, 1.0, 1.25)
+    s = min(s, (area.width * 0.34) / WINDOW_W, (area.height * 0.32) / WINDOW_H)  # his share of it
+    s *= size  # and then whatever you asked for, which only has to fit
+    return max(0.5, min(s, (area.width - 8) / WINDOW_W, (area.height * 0.7) / WINDOW_H))
 
 
 class App:
     def __init__(self):
         self.config = cfg = load_config()
         display = Gdk.Display.get_default()
-        self.area, density = pick_area(display, cfg["monitor"])
+        self.area, density, dpi = pick_area(display, cfg["monitor"])
         if self.area is None:  # no monitor right now (e.g. the lid is closed): try again soon
             print("yoda-desk: no monitor found, retrying in 10 s", file=sys.stderr)
             GLib.timeout_add_seconds(10, self._restart)
@@ -1493,7 +1519,7 @@ class App:
         except OSError as e:
             sys.exit(f"yoda-desk: can't use papers folder {cfg['papers_dir']}: {e}")
         notes = Notes(cfg["notes_dir"])
-        self.yoda = Yoda(self.area, self, lib, yoda_scale(self.area, cfg["size"]), density,
+        self.yoda = Yoda(self.area, self, lib, yoda_scale(self.area, cfg["size"], dpi), density,
                          cfg["remind_minutes"], notes)
         self.reading = ReadingPopup(self, lib)
         self.note_box = box = NoteBox(self, notes, self._note_written, self._note_box_placed)
@@ -1560,14 +1586,37 @@ class App:
         for label, cb in (("Reading list", lambda *_: self.toggle_reading_list()),
                           ("Write a note", lambda *_: self.write_note()),
                           ("Read notes", lambda *_: self.write_note(mode="read")),
-                          ("Celebrate", lambda *_: self._celebrate()),
-                          ("Quit Yoda", lambda *_: Gtk.main_quit())):
+                          ("Celebrate", lambda *_: self._celebrate())):
             item = Gtk.MenuItem(label=label)
             item.connect("activate", cb)
             menu.append(item)
+        size = Gtk.MenuItem(label="His size")
+        size.set_submenu(self._size_menu())
+        menu.append(size)
+        quit_item = Gtk.MenuItem(label="Quit Yoda")
+        quit_item.connect("activate", lambda *_: Gtk.main_quit())
+        menu.append(quit_item)
         menu.show_all()
         menu.popup_at_pointer(event)
         self._menu = menu  # keep a reference while it's open
+
+    def _size_menu(self):
+        """His size, on top of what the screen suits. Saved, and applied there and then."""
+        sub, group = Gtk.Menu(), None
+        for label, value in SIZES:
+            item = Gtk.RadioMenuItem(label=label, group=group)
+            group = group or item
+            item.set_active(abs(self.config["size"] - value) < 0.05)
+            item.connect("toggled", self._size_chosen, value)  # connected last: setting it is no choice
+            sub.append(item)
+        return sub
+
+    def _size_chosen(self, item, value):
+        if not item.get_active() or abs(self.config["size"] - value) < 0.05:
+            return
+        if save_config_value("size", value):
+            self.config["size"] = value
+            GLib.timeout_add(150, self._restart)  # once the menu is out of the way
 
     def _celebrate(self):
         self.yoda.say(self.yoda.pick(GOAL_MET), 8)

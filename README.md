@@ -76,7 +76,7 @@ yoda-desk notes         # read your notes
 yoda-desk uninstall     # remove him; your papers and notes stay
 ```
 
-You can also right-click Yoda for a menu.
+You can also right-click Yoda for a menu, including **His size** if he comes out too small or too large for your screen.
 
 <details>
 <summary><b>Settings</b></summary>
@@ -91,7 +91,7 @@ Saved in `~/.config/yoda-desk/config.json`:
 | `week_starts_on` | `monday` | the day your reading week starts |
 | `remind_minutes` | `45` | how often he reminds you; `0` for never |
 | `notes_dir` | `~/Papers/Notes` | where notes are kept |
-| `size` | `1.0` | his size, from `0.6` to `1.6` |
+| `size` | `1.0` | his size, from `0.5` to `2.5`, on top of what the screen suits (also under **His size** in his right-click menu) |
 | `monitor` | `"primary"` | or a monitor number: `0`, `1`, … |
 
 </details>

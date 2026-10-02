@@ -25,7 +25,7 @@ STATE_PATH = os.path.join(STATE_DIR, "reading-state.json")
 
 DEFAULTS = {
     "monitor": "primary",  # or a monitor number: 0, 1, ...
-    "size": 1.0,  # Yoda's size, relative to what suits the screen (0.6 to 1.6)
+    "size": 1.0,  # Yoda's size, on top of what suits the screen (0.5 to 2.5)
     "papers_dir": "~/Papers",
     "notes_dir": "~/Papers/Notes",
     "weekly_paper_goal": 3,
@@ -72,7 +72,7 @@ def load_config():
             config[key] = _coerce(key, value)
     if config["weekly_paper_goal"] < 1:
         config["weekly_paper_goal"] = DEFAULTS["weekly_paper_goal"]
-    config["size"] = max(0.6, min(1.6, config["size"] or 1.0))
+    config["size"] = max(0.5, min(2.5, config["size"] or 1.0))
     return config
 
 
