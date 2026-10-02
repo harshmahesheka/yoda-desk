@@ -101,7 +101,10 @@ Saved in `~/.config/yoda-desk/config.json`:
 <br>
 
 - **Transparency needs a compositor.** GNOME, KDE, Cinnamon, XFCE and most desktops have one. On a bare window manager, run one such as `picom`.
-- **Wayland** works through XWayland, though some compositors won't keep him behind other windows. X11 works best.
+- **Wayland** works through XWayland, with one difference: a compositor's bottom layer is where
+  GNOME's desktop-icons window ends up too, and that window is transparent but takes every click,
+  so he'd be visible and deaf. On Wayland he stays out of that layer. He still falls behind other
+  windows, since he never takes focus, but he starts out in front of them. X11 works best.
 - **Privacy.** Nothing leaves your computer, except title lookups for PDFs named after an arXiv ID, such as `2303.04137.pdf`.
 - **Under the hood.** Three Python files in `app/`, and Yoda as pre-rendered images in `assets/yoda/`.
 

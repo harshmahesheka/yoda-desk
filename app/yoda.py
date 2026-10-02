@@ -59,6 +59,14 @@ NOTE_FLIGHT = 1.25  # seconds for a note's light to reach the droid
 CELEBRATION = {"goal": 6.5, "rank": 9.0}  # seconds each celebration lasts
 HOVER_TALK_EVERY = 20  # seconds between status lines when you hover over him
 REQUEST_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "yoda-desk-request")
+# He runs on X11, through XWayland on a Wayland session. There, "keep below" drops him into the
+# compositor's bottom layer, under the desktop-icons window: GNOME's Desktop Icons NG can only
+# emulate a desktop window on Wayland, so its full-screen window sits in the normal layer instead.
+# It's transparent, so he still shows through it, but it swallows every click meant for him. So on
+# Wayland he stays out of the bottom layer. He still ends up behind other windows, since he never
+# takes focus and never raises himself.
+KEEP_BELOW = not (os.environ.get("WAYLAND_DISPLAY")
+                  or os.environ.get("XDG_SESSION_TYPE") == "wayland")
 
 
 def clamp(v, lo, hi):
@@ -81,12 +89,13 @@ def make_window(title):
     win = Gtk.Window(title=title)
     win.set_decorated(False)
     win.set_app_paintable(True)
-    win.set_keep_below(True)
+    win.set_keep_below(KEEP_BELOW)
     win.stick()
     win.set_skip_taskbar_hint(True)
     win.set_skip_pager_hint(True)
     win.set_type_hint(Gdk.WindowTypeHint.UTILITY)
     win.set_accept_focus(False)
+    win.set_focus_on_map(False)
     visual = win.get_screen().get_rgba_visual()
     if visual:
         win.set_visual(visual)
