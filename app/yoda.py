@@ -67,9 +67,11 @@ REQUEST_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "yoda-d
 # emulate a desktop window on Wayland, so its full-screen window sits in the normal layer instead.
 # It's transparent, so he still shows through it, but it swallows every click meant for him. So on
 # Wayland he stays out of the bottom layer. He still ends up behind other windows, since he never
-# takes focus and never raises himself.
+# takes focus and never raises himself. On macOS, GTK's "keep below" puts him at the desktop's own
+# level, behind the wallpaper, where he can't be seen at all.
 KEEP_BELOW = not (os.environ.get("WAYLAND_DISPLAY")
-                  or os.environ.get("XDG_SESSION_TYPE") == "wayland")
+                  or os.environ.get("XDG_SESSION_TYPE") == "wayland"
+                  or sys.platform == "darwin")
 
 
 def clamp(v, lo, hi):
@@ -96,7 +98,9 @@ def make_window(title):
     win.stick()
     win.set_skip_taskbar_hint(True)
     win.set_skip_pager_hint(True)
-    win.set_type_hint(Gdk.WindowTypeHint.UTILITY)
+    # On macOS, GTK hides utility windows whenever their app isn't the active one, and he never is.
+    if sys.platform != "darwin":
+        win.set_type_hint(Gdk.WindowTypeHint.UTILITY)
     win.set_accept_focus(False)
     win.set_focus_on_map(False)
     visual = win.get_screen().get_rgba_visual()
